@@ -45,13 +45,13 @@ if ( argv.help ) {
 var clients = new sets.Set();
 
 // Timeout stuff
+var timeout = argv.timeout * 1000;
 
 function runTimeout() {
     var work = clients.array();
-    var timeout = argv.timeout * 1000;
     var now = new Date().getTime();
     work.forEach( function(client, idx, a) {
-        if ( now - client._localData.lastTime > timeout ) {
+        if ( now - client._localData.lastTime > client._localData.timeout ) {
             client.end();
         }
     });
@@ -66,7 +66,7 @@ var ST_INVALID = -2;
 var ST_HANG = -1;
 var ST_PRE = 0;
 var ST_READ_HEADER = 1;
-var ST_DONE_HEADER = 2;
+var ST_RESPOND = 2;
 
 var RX_METHOD_LINE = /^(GET|POST) (\/[^ ]*) (HTTP\/[0-9\.]+)$/;
 var RX_HEADER = /^([A-Za-z0-9-]+): (.+)$/;
@@ -103,6 +103,31 @@ function parseUri(uri) {
             rest = undefined;
         } else if ( key == 'disconnect' ) {
             rv.set('disconnect', !!value);
+        } else if ( key == 'hangon' ) {
+            var nValue;
+            if ( value == "read_header" )
+                nValue = ST_READ_HEADER;
+            else if ( value == "respond" )
+                nValue = ST_RESPOND;
+            
+            if (typeof nValue === 'undefined') {
+                throw "invalid value for 'hangon': " + value;
+            } else {
+                rv.set('hangon',nValue);
+                rv.set('_orig_hangon',value);
+            }
+        } else if ( key == "timeout" ) {
+            var nValue = Number(value);
+            if ( isNaN(nValue) ) {
+                throw "invalid value for 'timeout': " + value;
+            }
+            rv.set('timeout',nValue);
+        } else if ( key == "delay" ) {
+            var nValue = Number(value);
+            if ( isNaN(nValue) ) {
+                throw "invalid value for 'delay': " + value;
+            }
+            rv.set('delay',nValue);
         } else {
             throw "invalid key " + key;
         }
@@ -112,8 +137,10 @@ function parseUri(uri) {
 
 function deparseUri(data) {
     // Rework some things
-    if ( data.has('_orig_redir') )
-        data.set('redir', data.get('_orig_redir') );
+    ['redir','hangon'].forEach( function(key,idx,a) {
+        if ( data.has('_orig_' + key) )
+            data.set(key, data.get('_orig_' + key) );
+    } );
 
     var next = data.get('next');
     var rv = "";
@@ -180,7 +207,13 @@ function gotLine(c,line,stream) {
     var localData = c._localData;
 
     localData.lastTime = new Date().getTime();
+    localData.timeout = timeout;
+    localData.hangState = undefined;
+
     var state = localData.state;
+    if ( localData.hangState == state )
+        state = ST_HANG;
+
     if ( state == ST_PRE ) {
         var data = line.match(RX_METHOD_LINE);
         if ( data ) {
@@ -191,9 +224,15 @@ function gotLine(c,line,stream) {
             state = ST_READ_HEADER;
             try {
                 localData.uriData = parseUri( localData.uri );
-                if ( localData.uriData.has('disconnect') ) {
+                if ( localData.uriData.has('disconnect') )
                     localData.disconnect = !! localData.uriData.get('disconnect');
-                }
+                if ( localData.uriData.has('timeout') )
+                    localData.timeout = localData.uriData.get('timeout');
+                if ( localData.uriData.has('hangon') )
+                    localData.hangState = localData.uriData.get('hangon');
+                if ( localData.uriData.has('delay') )
+                    if ( localData.uriData.get('delay') > localData.timeout )
+                        throw "Delay longer than timeout";
             } catch (e) {
                 localData.returnError = e;
                 console.log("URI Parse error: " + e);
@@ -204,13 +243,17 @@ function gotLine(c,line,stream) {
         }
     } else if ( state == ST_READ_HEADER ) {
         if ( line == "" ) {
-            state = ST_DONE_HEADER;
-            doRespond(c);
+            state = ST_RESPOND;
+            if ( localData.uriData.has('delay') ) {
+                setTimeout( function() { doRespond(c); }, localData.uriData.get('delay') * 1000 );
+            } else {
+                doRespond(c);
+            }
         } else {
             var data = line.match(RX_HEADER);
             localData.headers[ data[1] ] = data[2];
         }
-    } else if ( state == ST_DONE_HEADER ) {
+    } else if ( state == ST_RESPOND ) {
         state = ST_INVALID;
     }
 
@@ -245,6 +288,7 @@ function onServerConnect(c) {
     c.setEncoding('utf8');
     c.setKeepAlive(false);
 
+    c.on('error', function(e) {}); // We honestly do not care here.
     c.on('end', function() {
         clients.remove( c );
     });
