@@ -1,6 +1,9 @@
 {
     "name": "badhttpd",
+    "version": "0.0.1",
     "dependencies": {
-        "optimist": ">=0.6.0"
+        "optimist": ">=0.6.0",
+        "simplesets": ">=1.2.0",
+        "byline": ">=2.1.0 <3.0.0"
     }
 }
