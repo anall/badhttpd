@@ -4,6 +4,7 @@
     "dependencies": {
         "optimist": ">=0.6.0",
         "simplesets": ">=1.2.0",
-        "byline": ">=2.1.0 <3.0.0"
+        "byline": ">=2.1.0 <3.0.0",
+        "dict": ">=1.0.0"
     }
 }
