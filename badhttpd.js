@@ -94,11 +94,15 @@ function parseUri(uri) {
             } else if ( isNaN(nValue) ) {
                 throw "invalid value for 'redir': " + value;
             }
-            if ( nValue )
+            if ( nValue ) {
                 rv.set('redir',nValue);
+                rv.set('_orig_redir',value);
+            }
         } else if ( key == 'next' ) {
             rv.set('next',rest);
             rest = undefined;
+        } else if ( key == 'disconnect' ) {
+            rv.set('disconnect', !!value);
         } else {
             throw "invalid key " + key;
         }
@@ -107,9 +111,16 @@ function parseUri(uri) {
 }
 
 function deparseUri(data) {
+    // Rework some things
+    if ( data.has('_orig_redir') )
+        data.set('redir', data.get('_orig_redir') );
+
     var next = data.get('next');
     var rv = "";
     data.forEach( function(v,k) {
+        if ( k.match(/^_/) ) return; // Skip internal ones
+        if ( k == 'next' ) return; // Skip next
+
         rv = rv + "/" + k + ":" + v;
     } );
     if ( next )
@@ -147,18 +158,21 @@ function doRespond(c) {
 
     if ( localData.returnError ) {
         return respondError( c, localData.returnError );
-    } else if ( uriData.has('next') ) {
-        // Next overrides redir as a redirect, redir is for redirect loop
-        return respondRedirect( c, uriData.get('next') );
     } else if ( uriData.has('redir') ) {
         var redir = uriData.get('redir');
         if ( redir < 0 ) { // negative numbers are infinite
+            if ( uriData.has('next') )
+                return respondError( c, "infinite redirect and 'next' do not mix" );
         } else if ( redir-1 <= 0 ) {
             uriData.delete('redir');
+            uriData.delete('_orig_redir');
         } else {
             uriData.set('redir', redir-1);
+            uriData.delete('_orig_redir');
         }
         return respondRedirect( c, deparseUri( uriData ) );
+    } else if ( uriData.has('next') ) { // Redir should take priority
+        return respondRedirect( c, uriData.get('next') );
     }
 }
 
