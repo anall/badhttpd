@@ -81,11 +81,26 @@ function parseUri(uri) {
         var value = part[2];
         rest = part[3];
 
-        if ( key == 'redir' ) {
-            rv.set('redir',value);
+        if ( rv.has(key) ) {
+            throw "repeated key " + key;
+        } else if ( key == 'redir' ) {
+            var nValue = Number(value);
+            if ( value == "true" ) {
+                nValue = 1;
+            } else if ( value == "false" ) {
+                nValue = 0;
+            } else if ( value == "loop" ) {
+                nValue = -1;
+            } else if ( isNaN(nValue) ) {
+                throw "invalid value for 'redir': " + value;
+            }
+            if ( nValue )
+                rv.set('redir',nValue);
         } else if ( key == 'next' ) {
             rv.set('next',rest);
             rest = undefined;
+        } else {
+            throw "invalid key " + key;
         }
     }
     return rv;
@@ -102,16 +117,25 @@ function deparseUri(data) {
     return rv;
 }
 
+function respondError(c,error) {
+    c.write("HTTP/1.1 500 Infernal Server Error\r\n");
+    c.write("\r\n" + error + "\r\n");
+    c.end();
+}
+
 function respondRedirect(c,dest) {
     var localData = c._localData;
     var host = localData.headers['Host']
     if ( !host ) {
         host = argv.host + ":" + argv.port;
     }
+    if ( ! dest ) {
+        return respondError( c, "Invalid destination" );
+    }
 
     c.write("HTTP/1.1 302 Found\r\n");
     c.write( "Location: http://" + host + dest + "\r\n");
-    c.write("\r\nA redirect is you\r\n");
+    c.write("\r\nYou can has redirect\r\n");
     c.end();
 }
 
@@ -121,10 +145,12 @@ function doRespond(c) {
 
     localData.lastTime = new Date().getTime();
 
-    // Next overrides redir as a redirect, redir is for redirect loop
-    if ( uriData.has('next') ) {
+    if ( localData.returnError ) {
+        return respondError( c, localData.returnError );
+    } else if ( uriData.has('next') ) {
+        // Next overrides redir as a redirect, redir is for redirect loop
         return respondRedirect( c, uriData.get('next') );
-    } else if ( uriData.has('redir') && uriData.get('redir') ) {
+    } else if ( uriData.has('redir') ) {
         var redir = uriData.get('redir');
         if ( redir < 0 ) { // negative numbers are infinite
         } else if ( redir-1 <= 0 ) {
@@ -149,9 +175,15 @@ function gotLine(c,line,stream) {
             localData.uri = data[2];
             localData.headers = {};
             state = ST_READ_HEADER;
-            localData.uriData = parseUri( localData.uri );
-            if ( localData.uriData.has('disconnect') ) {
-                localData.disconnect = localData.uriData.get('disconnect');
+            try {
+                localData.uriData = parseUri( localData.uri );
+                if ( localData.uriData.has('disconnect') ) {
+                    localData.disconnect = !! localData.uriData.get('disconnect');
+                }
+            } catch (e) {
+                localData.returnError = e;
+                console.log("URI Parse error: " + e);
+                localData.disconnect = false;
             }
         } else {
             state = ST_INVALID;
