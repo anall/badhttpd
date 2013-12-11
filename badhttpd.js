@@ -72,15 +72,13 @@ function runTimeout() {
     var work = clients.array();
     var now = new Date().getTime();
     work.forEach( function(client, idx, a) {
-        if ( now - client._localData.lastTime > client._localData.timeout ) {
+        if ( client._localData.timeout > 0 && now - client._localData.lastTime > client._localData.timeout ) {
             client.end();
         }
     });
 }
 
-if ( argv.timeout > 0 ) {
-    setInterval(runTimeout,1000)
-}
+setInterval(runTimeout,1000);
 
 // Client state machine
 var ST_INVALID = -2;
@@ -228,8 +226,7 @@ function gotLine(c,line,stream) {
     var localData = c._localData;
 
     localData.lastTime = new Date().getTime();
-    localData.timeout = timeout;
-    localData.hangState = undefined;
+
 
     var state = localData.state;
     if ( localData.hangState == state )
@@ -304,7 +301,9 @@ function onServerConnect(c) {
     c._localData = {
         "lastTime": new Date().getTime(),
         "state": ST_PRE,
-        "disconnect": argv.disconnect
+        "disconnect": argv.disconnect,
+        "timeout": timeout
+        "hangState": undefined
     };
     c.setEncoding('utf8');
     c.setKeepAlive(false);
