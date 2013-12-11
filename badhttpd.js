@@ -23,7 +23,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 var util        = require('util'),
     net         = require('net'),
     byline      = require('byline'),
-    sets        = require('simplesets'),
+    Set         = require('set'),
     dict        = require('dict'),
     optimist    = require('optimist');
 var argv= optimist
@@ -63,7 +63,7 @@ if ( argv.help ) {
     return;
 }
 
-var clients = new sets.Set();
+var clients = new Set();
 
 // Timeout stuff
 var timeout = argv.timeout * 1000;
