@@ -3,7 +3,7 @@
     "version": "0.0.1",
     "dependencies": {
         "optimist": ">=0.6.0",
-        "set": ">=1.0.0",
+        "simplesets": "",
         "byline": ">4.0.0",
         "dict": ">=1.0.0"
     },

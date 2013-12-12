@@ -23,7 +23,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 var util        = require('util'),
     net         = require('net'),
     byline      = require('byline'),
-    Set         = require('set'),
+    Set         = require('simplesets').Set,
     dict        = require('dict'),
     optimist    = require('optimist');
 var argv= optimist
@@ -78,7 +78,7 @@ function runTimeout() {
     });
 }
 
-setInterval(runTimeout,1000);
+//setInterval(runTimeout,1000);
 
 // Client state machine
 var ST_INVALID = -2;
@@ -227,7 +227,6 @@ function gotLine(c,line,stream) {
 
     localData.lastTime = new Date().getTime();
 
-
     var state = localData.state;
     if ( localData.hangState == state )
         state = ST_HANG;
@@ -245,16 +244,18 @@ function gotLine(c,line,stream) {
                 if ( localData.uriData.has('disconnect') )
                     localData.disconnect = !! localData.uriData.get('disconnect');
                 if ( localData.uriData.has('timeout') )
-                    localData.timeout = localData.uriData.get('timeout');
+                    localData.timeout = localData.uriData.get('timeout') * 1000;
                 if ( localData.uriData.has('hangon') )
                     localData.hangState = localData.uriData.get('hangon');
                 if ( localData.uriData.has('delay') )
-                    if ( localData.uriData.get('delay') > localData.timeout )
-                        throw "Delay longer than timeout";
+                    if ( localData.uriData.get('delay') >= localData.timeout )
+                        throw "Timeout not longer than delay";
             } catch (e) {
                 localData.returnError = e;
                 console.log("URI Parse error: " + e);
                 localData.disconnect = false;
+                localData.uriData.delete('delay');
+                localData.hangState = undefined;
             }
         } else {
             state = ST_INVALID;
@@ -271,7 +272,7 @@ function gotLine(c,line,stream) {
             var data = line.match(RX_HEADER);
             localData.headers[ data[1] ] = data[2];
         }
-    } else if ( state == ST_RESPOND ) {
+    } else if ( state == ST_RESPOND && line != "" ) { // line check is temporary hack
         state = ST_INVALID;
     }
 
@@ -302,7 +303,7 @@ function onServerConnect(c) {
         "lastTime": new Date().getTime(),
         "state": ST_PRE,
         "disconnect": argv.disconnect,
-        "timeout": timeout
+        "timeout": timeout,
         "hangState": undefined
     };
     c.setEncoding('utf8');
