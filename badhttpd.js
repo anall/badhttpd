@@ -130,6 +130,7 @@ function parseUri(uri) {
                 throw "invalid value for 'disconnect': " + value;
             }
             rv.set('disconnect', nValue);
+            rv.set('_orig_disconnect',value);
         } else if ( key == 'hangon' ) {
             var nValue;
             if ( value == "read_header" )
@@ -164,7 +165,7 @@ function parseUri(uri) {
 
 function deparseUri(data) {
     // Rework some things
-    ['redir','hangon'].forEach( function(key,idx,a) {
+    ['redir','hangon','disconnect'].forEach( function(key,idx,a) {
         if ( data.has('_orig_' + key) )
             data.set(key, data.get('_orig_' + key) );
     } );
