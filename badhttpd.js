@@ -248,7 +248,8 @@ function gotLine(c,line,stream) {
                 if ( localData.uriData.has('hangon') )
                     localData.hangState = localData.uriData.get('hangon');
                 if ( localData.uriData.has('delay') )
-                    if ( localData.uriData.get('delay') >= localData.timeout )
+                    if ( localData.timeout > 0 && 
+                            localData.uriData.get('delay') >= localData.timeout )
                         throw "Timeout not longer than delay";
             } catch (e) {
                 localData.returnError = e;
