@@ -78,7 +78,7 @@ function runTimeout() {
     });
 }
 
-//setInterval(runTimeout,1000);
+setInterval(runTimeout,1000);
 
 // Client state machine
 var ST_INVALID = -2;
@@ -121,7 +121,15 @@ function parseUri(uri) {
             rv.set('next',rest);
             rest = undefined;
         } else if ( key == 'disconnect' ) {
-            rv.set('disconnect', !!value);
+            var nValue = Number(value);
+            if ( value == "true" ) {
+                nValue = 1;
+            } else if ( value == "false" ) {
+                nValue = 0;
+            } else if ( isNaN(nValue) ) {
+                throw "invalid value for 'disconnect': " + value;
+            }
+            rv.set('disconnect', nValue);
         } else if ( key == 'hangon' ) {
             var nValue;
             if ( value == "read_header" )
@@ -228,8 +236,6 @@ function gotLine(c,line,stream) {
     localData.lastTime = new Date().getTime();
 
     var state = localData.state;
-    if ( localData.hangState == state )
-        state = ST_HANG;
 
     if ( state == ST_PRE ) {
         var data = line.match(RX_METHOD_LINE);
@@ -252,6 +258,8 @@ function gotLine(c,line,stream) {
                             localData.uriData.get('delay') >= localData.timeout )
                         throw "Timeout not longer than delay";
             } catch (e) {
+                if ( ! localData.uriData )
+                    localData.uriData = dict({});
                 localData.returnError = e;
                 console.log("URI Parse error: " + e);
                 localData.disconnect = false;
@@ -276,12 +284,15 @@ function gotLine(c,line,stream) {
     } else if ( state == ST_RESPOND && line != "" ) { // line check is temporary hack
         state = ST_INVALID;
     }
+    
+    if ( localData.hangState == state )
+        state = ST_HANG;
 
     if ( state == ST_HANG ) {
         if ( localData.disconnect ) {
             c.end();
         } else {
-            c.pause();
+            //c.pause();
         }
     } else if ( state == ST_INVALID ) {
         console.log("Reached invalid state");
